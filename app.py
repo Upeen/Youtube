@@ -566,19 +566,42 @@ with st.sidebar:
     st.markdown("# 🎯 YT Recommender")
     st.caption("AI-Powered YouTube Recommendations")
     
-    # Show Last Refreshed & Data Coverage
-    if engine and engine.fetched_at:
-        try:
-            # The timestamp is saved in UTC
-            dt_utc = datetime.fromisoformat(engine.fetched_at.replace("Z", "+00:00"))
-            # Convert to local timezone
-            dt_local = dt_utc.astimezone(None)
-            refresh_time = dt_local.strftime("%Y-%m-%d %I:%M %p")
-            st.info(f"💾 **Last Refresh (Local):**\n{refresh_time}")
-        except:
-            st.info(f"💾 **Last Refresh:**\n{engine.fetched_at[:19]}")
-    elif not engine:
+    # Show Data Coverage Warning
+    if not engine:
         st.warning("⚠️ No data loaded yet.")
+    elif engine and engine.fetched_at:
+        try:
+            from datetime import datetime, timezone
+            dt_utc = datetime.fromisoformat(engine.fetched_at.replace("Z", "+00:00"))
+            now_utc = datetime.now(timezone.utc)
+            diff = now_utc - dt_utc
+            
+            # Create a "Time Ago" string
+            seconds = diff.total_seconds()
+            if seconds < 60:
+                time_str = "Just now"
+            elif seconds < 3600:
+                time_str = f"{int(seconds // 60)} mins ago"
+            elif seconds < 86400:
+                time_str = f"{int(seconds // 3600)} hrs ago"
+            else:
+                time_str = f"{int(seconds // 86400)} days ago"
+
+            # Check if we are currently fetching (based on session state)
+            if st.session_state.get('fetching_now', False):
+                st.markdown(f"""
+                    <div style="font-size: 0.75rem; color: #FFA500; background: rgba(255, 165, 0, 0.1); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 165, 0, 0.2); font-weight: 600;">
+                        🔄 Fetching latest news...
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                    <div style="font-size: 0.75rem; color: #2BD2FF; background: rgba(43, 210, 255, 0.1); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(43, 210, 255, 0.2); font-weight: 600;">
+                        💾 Updated {time_str}
+                    </div>
+                """, unsafe_allow_html=True)
+        except Exception:
+            st.info(f"💾 Refresh: {engine.fetched_at[:16]}")
 
     st.divider()
 
@@ -591,20 +614,41 @@ with st.sidebar:
     st.divider()
 
     if st.button("🚀 Fetch Fresh Data", use_container_width=True, type="primary"):
-        with st.status("Fetching latest data...", expanded=True) as status:
-            st.write("Initializing Optimized Parallel Fetcher...")
-            try:
-                from fetch_data import fetch_all_channels
-                videos = fetch_all_channels()
-                st.write(f"Successfully fetched {len(videos)} videos!")
-                st.cache_resource.clear()
-                status.update(label="Fetch Complete!", state="complete", expanded=False)
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Could not fetch data: {exc}")
-                status.update(label="Fetch Failed", state="error")
+        st.session_state.fetching_now = True
+        st.rerun()
+
+# --- TRIGGER ACTUAL FETCH IF STATE IS SET ---
+if st.session_state.get('fetching_now', False):
+    with st.status("Fetching latest data...", expanded=True) as status:
+        st.write("Initializing Optimized Parallel Fetcher...")
+        try:
+            from fetch_data import fetch_all_channels
+            videos = fetch_all_channels()
+            st.write(f"Successfully fetched {len(videos)} videos!")
+            st.cache_resource.clear()
+            st.session_state.fetching_now = False
+            status.update(label="Fetch Complete!", state="complete", expanded=False)
+            st.rerun()
+        except Exception as exc:
+            st.session_state.fetching_now = False
+            st.error(f"Could not fetch data: {exc}")
+            status.update(label="Fetch Failed", state="error")
     
-    st.caption("v2.0 Optimized Parallel Fetcher")
+    with st.sidebar.expander("📖 Metrics Glossary", expanded=False):
+        st.markdown("""
+        **VPH (Velocity)**
+        `Views / Age` - Speed of growth.
+        
+        **Engagement %**
+        `Likes+Comments / Views`
+        
+        **Trend Score**
+        Hybrid of Velocity (60%) and Engagement (40%).
+        
+        **Coverage Gap**
+        Time delay behind the first reporting channel.
+        """)
+    
 
 
 
@@ -636,6 +680,7 @@ if page == PAGE_DASHBOARD:
     local_date_range, local_channel, local_vt = get_local_filters("dash")
 
     st.markdown("---")
+
 
     # ── FULL WIDTH TRENDING ──────────────────────────────────────────
     st.markdown("### 🔥 Top Viral Trends (Top 50)")
@@ -687,30 +732,13 @@ elif page == PAGE_TRENDING:
     cols = st.columns(3)
     for index, video in enumerate(trending, start=1):
         with cols[(index - 1) % 3]:
-            badge_text = f"#{index} Trending | {format_number(video.get('views_per_hour', 0))} views/hr"
+            score = video.get('trend_score', 0)
+            vph = format_number(video.get('views_per_hour', 0))
+            badge_text = f"#{index} Trending | 💎 {score:.2f} | {vph} VPH"
             st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
             st.markdown("")
 
 
-    video_options = {f"{video['title'][:70]}... ({video['channel_name']})": video["video_id"] for video in engine.videos}
-    selected = st.selectbox("Choose a video", list(video_options.keys()), key="similar_select")
-
-    if selected:
-        video_id = video_options[selected]
-        similar = engine.get_recommendations(video_id=video_id, top_n=6)
-
-        if similar:
-            sim_cols = st.columns(3)
-            for index, video in enumerate(similar):
-                with sim_cols[index % 3]:
-                    score = video.get("content_similarity", 0)
-                    st.markdown(
-                        render_video_card(video, "match", f"Match: {score:.0%}"),
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown("")
-        else:
-            st.info("No similar videos found.")
 
 
 elif page == PAGE_SEARCH:
@@ -785,7 +813,7 @@ elif page == PAGE_DATA:
                     pass
         filtered = filtered_by_date
 
-    st.markdown(f"### 📑 Dataset ({len(filtered)} videos)")
+    st.markdown("### 📑 Dataset")
     
     if not filtered:
         st.info("No videos found matching the current filters.")
@@ -802,9 +830,20 @@ elif page == PAGE_DATA:
             eng_score = engine._engagement_score(v)
             fresh_score = engine._freshness_score(v)
             trend_score = (math.log10(velocity + 1) / 5) * 0.6 + eng_score * 0.4
+
+            # Format Publication Date and Time
+            pub_at = v.get("published_at", "")
+            try:
+                dt_obj = dt.fromisoformat(pub_at.replace("Z", "+00:00")).astimezone(None)
+                pub_date = dt_obj.strftime("%Y-%m-%d")
+                pub_time = dt_obj.strftime("%I:%M %p")
+            except:
+                pub_date = pub_at[:10]
+                pub_time = "N/A"
             
             display_data.append({
-                "Published": v.get("published_at", "")[:10],
+                "Published": pub_date,
+                "Time": pub_time,
                 "Channel": v.get("channel_name", ""),
                 "Title": v.get("title", ""),
                 "Type": v.get("video_type", "Video"),

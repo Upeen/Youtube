@@ -245,7 +245,7 @@ class RecommendationEngine:
             return results
 
     def get_trending(self, top_n=10, channel="All", date_range=None, sort_by="trend_score", video_type="All", **kwargs):
-        """Get trending videos across all channels."""
+        """Get trending videos using original Velocity + Engagement logic."""
         results = []
         for i, v in enumerate(self.videos):
             if channel != "All" and v["channel_name"] != channel:
@@ -265,9 +265,10 @@ class RecommendationEngine:
                 
             views = v.get("view_count", 0)
             age = max(v.get("age_hours", 1), 1)
-            # Velocity = views per hour
             velocity = views / age
+            
             engagement = self._engagement_score(v)
+            # Original Logic: 60% Velocity magnitude, 40% Engagement quality
             trend_score = (math.log10(velocity + 1) / 5) * 0.6 + engagement * 0.4
             
             v_copy = v.copy()
