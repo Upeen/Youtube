@@ -1,0 +1,21 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Sensitivity / Credentials
+private_key.json
+.env
+
+# Data and large files
+data/
+*.csv
+*.json
+!private_key.json # Actually, ignore ALL json except if explicitly needed, but better just ignore private_key.json specifically
+
+# AI / Tooling
+.gemini/
+
+# OS files
+.DS_Store
+Thumbs.db
