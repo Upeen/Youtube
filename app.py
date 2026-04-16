@@ -112,20 +112,32 @@ st.markdown(
         letter-spacing: -0.5px;
     }
 
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 61, 113, 0.4); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 61, 113, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 61, 113, 0); }
+    }
+
     .stat-card {
         background: linear-gradient(135deg, rgba(10,10,15,0.95), rgba(15,15,22,0.95));
         border: 1px solid rgba(255,255,255,0.05);
         border-radius: 16px;
         padding: 24px;
         text-align: center;
-        transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
+        transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
         backdrop-filter: blur(10px);
+        animation: fadeInUp 0.6s ease-out forwards;
     }
 
     .stat-card:hover {
-        border-color: rgba(255,255,255,0.15);
-        transform: translate3d(0, -4px, 0);
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        border-color: rgba(255,61,113,0.3);
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
     }
 
     .stat-value {
@@ -144,14 +156,30 @@ st.markdown(
         border: 1px solid rgba(255,255,255,0.05);
         border-radius: 14px;
         overflow: hidden;
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease;
+        transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
         height: 100%;
+        animation: fadeInUp 0.8s ease-out forwards;
+    }
+
+    .video-card:hover {
+        border-color: rgba(255,255,255,0.2);
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+    }
+
+    .badge-trend {
+        animation: pulse 2s infinite;
     }
 
     .video-thumb {
         width: 100%;
         aspect-ratio: 16/9;
         object-fit: cover;
+        transition: transform 0.6s ease;
+    }
+
+    .video-card:hover .video-thumb {
+        transform: scale(1.1);
     }
 
     .video-body { padding: 16px; }
