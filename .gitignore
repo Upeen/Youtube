@@ -13,8 +13,8 @@ data/
 *.json
 !private_key.json # Actually, ignore ALL json except if explicitly needed, but better just ignore private_key.json specifically
 
-# AI / Tooling
-.gemini/
+# AI / Tooling (Removed from ignore to track skills)
+#.gemini/
 
 # OS files
 .DS_Store
