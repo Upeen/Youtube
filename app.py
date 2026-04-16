@@ -21,6 +21,59 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# --- AUTHENTICATION LOGIC ---
+def check_authentication():
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        # Load the master key for comparison
+        master_key_path = os.path.join(os.path.dirname(__file__), "private_key.json")
+        master_key = None
+        if os.path.exists(master_key_path):
+            with open(master_key_path, "r") as f:
+                master_key = json.load(f)
+        
+        st.markdown("""
+            <div style="text-align:center; padding: 100px 20px;">
+                <h1 style="background: linear-gradient(135deg, #FF6B6B, #FF3D71); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 3rem; margin-bottom: 20px;">
+                    🔐 Secured Access
+                </h1>
+                <p style="color: #9898b0; font-size: 1.1rem; max-width: 600px; margin: 0 auto 40px auto;">
+                    This dashboard is restricted. Please upload your <b>Private Key (JSON)</b> file to verify your identity and unlock the analytics suite.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            uploaded_file = st.file_uploader("Upload Private Key JSON", type=['json'])
+            
+            if uploaded_file is not None:
+                try:
+                    payload = json.load(uploaded_file)
+                    # Unified Validation
+                    if master_key:
+                        is_valid = (
+                            payload.get("private_key") == master_key.get("private_key") and
+                            payload.get("project_id") == master_key.get("project_id")
+                        )
+                    else:
+                        is_valid = payload.get("private_key") == "Devidpl@11491750"
+                    
+                    if is_valid:
+                        st.session_state.authenticated = True
+                        st.success("Authentication Successful! Redirecting...")
+                        st.rerun()
+                    else:
+                        st.error("Invalid Private Key. Access Denied.")
+                except Exception as e:
+                    st.error(f"Error parsing JSON: {str(e)}")
+        
+        st.stop() # Stop execution if not authenticated
+
+check_authentication()
+
 st.markdown(
     """
 <style>
@@ -31,8 +84,6 @@ st.markdown(
         --accent-pink: #C850C0;
         --accent-purple: #4158D0;
         --accent-blue: #2BD2FF;
-        --accent-green: #00E676;
-        --accent-orange: #FF9A44;
     }
 
     html, body, [class*="css"] {
@@ -43,15 +94,13 @@ st.markdown(
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    .main .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 2rem;
-        max-width: 1400px;
-    }
-
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #050508 0%, #0a0a0f 100%);
         border-right: 1px solid rgba(255,255,255,0.03);
+    }
+
+    [data-testid="stSidebar"] section::-webkit-scrollbar {
+        display: none;
     }
 
     [data-testid="stSidebar"] .stMarkdown h1 {
@@ -63,15 +112,6 @@ st.markdown(
         letter-spacing: -0.5px;
     }
 
-    /* Hide Sidebar Scrollbar */
-    [data-testid="stSidebar"] section::-webkit-scrollbar {
-        display: none;
-    }
-    [data-testid="stSidebar"] section {
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-    }
-
     .stat-card {
         background: linear-gradient(135deg, rgba(10,10,15,0.95), rgba(15,15,22,0.95));
         border: 1px solid rgba(255,255,255,0.05);
@@ -80,7 +120,6 @@ st.markdown(
         text-align: center;
         transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
         backdrop-filter: blur(10px);
-        will-change: transform;
     }
 
     .stat-card:hover {
@@ -93,80 +132,35 @@ st.markdown(
         font-size: 2rem;
         font-weight: 800;
         letter-spacing: -1px;
-        line-height: 1.2;
     }
 
     .stat-label {
         font-size: 0.82rem;
         color: #9898b0;
-        font-weight: 500;
-        margin-top: 6px;
     }
-
-    .gradient-text-red { background: linear-gradient(135deg, #FF6B6B, #FF3D71); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .gradient-text-purple { background: linear-gradient(135deg, #4158D0, #C850C0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .gradient-text-green { background: linear-gradient(135deg, #00C9FF, #92FE9D); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .gradient-text-warm { background: linear-gradient(135deg, #FA8BFF, #2BD2FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
     .video-card {
         background: rgba(10, 10, 15, 0.98);
         border: 1px solid rgba(255,255,255,0.05);
         border-radius: 14px;
         overflow: hidden;
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease;
         height: 100%;
-        will-change: transform;
-    }
-
-    .video-card:hover {
-        border-color: rgba(255,255,255,0.25);
-        transform: translate3d(0, -6px, 0) scale(1.01);
-        box-shadow: 0 15px 45px rgba(0,0,0,0.5), 0 0 40px rgba(200,80,192,0.15);
     }
 
     .video-thumb {
         width: 100%;
         aspect-ratio: 16/9;
         object-fit: cover;
-        border-radius: 14px 14px 0 0;
     }
 
-    .video-body {
-        padding: 16px;
-    }
+    .video-body { padding: 16px; }
 
     .video-title {
         font-size: 0.88rem;
         font-weight: 600;
-        line-height: 1.4;
-        margin-bottom: 8px;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
         color: #f0f0f5;
-    }
-
-    .video-channel {
-        font-size: 0.78rem;
-        color: #9898b0;
-        font-weight: 500;
         margin-bottom: 8px;
-    }
-
-    .video-stats {
-        display: flex;
-        gap: 12px;
-        font-size: 0.75rem;
-        color: #f0f0f5;
-        flex-wrap: wrap;
-        font-weight: 600;
-    }
-
-    .video-stats span {
-        display: flex;
-        align-items: center;
-        gap: 4px;
     }
 
     .badge {
@@ -175,165 +169,35 @@ st.markdown(
         font-weight: 700;
         padding: 3px 10px;
         border-radius: 20px;
-        margin-bottom: 8px;
     }
 
-    .badge-trend {
-        background: linear-gradient(135deg, #FF9A44, #FF3D71);
-        color: white;
-    }
-
-    .badge-score {
-        background: linear-gradient(135deg, #4158D0, #C850C0);
-        color: white;
-    }
-
-    .badge-match {
-        background: linear-gradient(135deg, #00C9FF, #92FE9D);
-        color: #0a0a0f;
-    }
-
-    .badge-type-live {
-        background: linear-gradient(135deg, #FF0000, #FF4500);
-        color: white;
-    }
-
-    .badge-type-short {
-        background: linear-gradient(135deg, #8E2DE2, #4A00E0);
-        color: white;
-    }
-
-    .badge-type-video {
-        background: rgba(255,255,255,0.1);
-        color: #9898b0;
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-
-    .channel-card {
-        background: rgba(22, 22, 31, 0.85);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 16px;
-        padding: 28px;
-        transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
-        position: relative;
-        overflow: hidden;
-        will-change: transform;
-    }
-
-    .channel-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(135deg, #4158D0, #C850C0);
-    }
-
-    .channel-card:hover {
-        border-color: rgba(255,255,255,0.2);
-        transform: translate3d(0, -4px, 0);
-        box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 20px rgba(65,88,208,0.15);
-    }
-
-    .channel-name {
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin-bottom: 4px;
-        color: #f0f0f5;
-    }
-
-    .channel-subs {
-        font-size: 0.78rem;
-        color: #5e5e78;
-        margin-bottom: 16px;
-    }
-
-    .ch-stat-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-    }
-
-    .ch-stat-box {
-        background: rgba(26, 26, 38, 0.8);
+    .stButton > button {
         border-radius: 12px;
-        padding: 14px;
-        text-align: center;
-        transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-    
-    .ch-stat-box:hover {
-        background: rgba(35, 35, 50, 0.9);
-        transform: translateY(-2px);
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-
-    .ch-stat-val {
-        font-size: 1.1rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #FA8BFF, #2BD2FF, #2BFF88);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    .ch-stat-label {
-        font-size: 0.7rem;
-        color: #f0f0f5;
-        margin-top: 4px;
         font-weight: 600;
-        opacity: 0.8;
+        font-family: 'Inter', sans-serif;
     }
 
-    .section-title {
-        font-size: 1.5rem;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        margin-bottom: 4px;
-        color: #f0f0f5;
-    }
-
-    .section-subtitle {
-        font-size: 0.88rem;
-        color: #9898b0;
-        margin-bottom: 24px;
-    }
+    .gradient-text-red { background: linear-gradient(135deg, #FF6B6B, #FF3D71); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .gradient-text-purple { background: linear-gradient(135deg, #4158D0, #C850C0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .gradient-text-green { background: linear-gradient(135deg, #00C9FF, #92FE9D); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .gradient-text-warm { background: linear-gradient(135deg, #FA8BFF, #2BD2FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
     .tag-pill {
         display: inline-block;
         font-size: 0.68rem;
-        padding: 3px 10px;
-        background: rgba(65, 88, 208, 0.15);
-        color: #2BD2FF;
-        border-radius: 20px;
+        padding: 2px 8px;
+        background: rgba(255, 61, 113, 0.1);
+        color: #FF3D71;
+        border-radius: 4px;
         margin: 2px;
-        font-weight: 500;
-        transition: all 0.2s ease;
-    }
-    
-    .tag-pill:hover {
-        background: rgba(65, 88, 208, 0.35);
-        transform: translateY(-1px);
-        color: #ffffff;
+        font-weight: 600;
     }
 
-    @keyframes float1 {
-        0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-        50% { transform: translate3d(0, -30px, 0) scale(1.05); }
-    }
-    
-    @keyframes float2 {
-        0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-        50% { transform: translate3d(0, 30px, 0) scale(0.95); }
-    }
-
-    @keyframes fadeInSlideUp {
-        from { opacity: 0; transform: translate3d(0, 15px, 0); }
-        to { opacity: 1; transform: translate3d(0, 0, 0); }
-    }
-
-    .video-card, .stat-card, .channel-card {
-        animation: fadeInSlideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    a.video-link {
+        color: #FF3D71;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.82rem;
     }
 
     .stApp::before {
@@ -344,63 +208,9 @@ st.markdown(
         width: 500px;
         height: 500px;
         background: #FF3D71;
-        border-radius: 50%;
         filter: blur(150px);
-        opacity: 0.06;
+        opacity: 0.05;
         pointer-events: none;
-        z-index: 0;
-        animation: float1 15s ease-in-out infinite;
-    }
-
-    .stApp::after {
-        content: '';
-        position: fixed;
-        bottom: -10%;
-        left: -5%;
-        width: 400px;
-        height: 400px;
-        background: #4158D0;
-        border-radius: 50%;
-        filter: blur(140px);
-        opacity: 0.06;
-        pointer-events: none;
-        z-index: 0;
-        animation: float2 18s ease-in-out infinite;
-    }
-
-    .stButton > button {
-        border-radius: 12px;
-        font-weight: 600;
-        font-family: 'Inter', sans-serif;
-        transition: all 0.2s ease;
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-    }
-
-    a.video-link {
-        color: #FF3D71;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 0.82rem;
-        transition: color 0.2s;
-    }
-
-    a.video-link:hover {
-        color: #FF6B6B;
-    }
-
-    hr {
-        border: none;
-        border-top: 1px solid rgba(255,255,255,0.06);
-        margin: 24px 0;
-    }
-
-    .streamlit-expanderHeader {
-        font-weight: 600;
-        font-size: 0.9rem;
     }
 </style>
 """,
@@ -617,6 +427,11 @@ with st.sidebar:
         st.session_state.fetching_now = True
         st.rerun()
 
+    st.divider()
+    if st.button("🔓 Logout", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
+
 # --- TRIGGER ACTUAL FETCH IF STATE IS SET ---
 if st.session_state.get('fetching_now', False):
     with st.status("Fetching latest data...", expanded=True) as status:
@@ -690,7 +505,7 @@ if page == PAGE_DASHBOARD:
         tcols = st.columns(3)
         for index, video in enumerate(trending, start=1):
             with tcols[(index-1) % 3]:
-                badge_text = f"#{index} Viral | {format_number(video.get('views_per_hour', 0))} VPH"
+                badge_text = f"#{index} Viral | 💎 {video.get('trend_score', 0):.2f} | {format_number(video.get('views_per_hour', 0))} VPH"
                 st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
                 st.markdown("")
     else:
