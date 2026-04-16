@@ -906,19 +906,38 @@ elif page == PAGE_COVERAGE:
                     "Published At (First)": ts.strftime("%Y-%m-%d %H:%M") if ts else "N/A",
                     "Time Gap": delay_str,
                     "Stories": channel_story_count.get(ch, 0),
-                    "Views (First Video)": format_number(v.get("view_count", 0)),
-                    "Likes": format_number(v.get("like_count", 0)),
-                    "Eng. Rate": f"{v.get('engagement_rate', 0):.2f}%",
+                    "Views (First Video)": v.get("view_count", 0),
+                    "Likes": v.get("like_count", 0),
+                    "Comments": v.get("comment_count", 0),
+                    "Eng. Rate (%)": round(v.get('engagement_rate', 0), 2),
+                    "Eng. Score": round(v.get('engagement_score', 0), 4),
+                    "Velocity (VPH)": round(v.get('views_per_hour', 0), 1),
+                    "Trend Score": round(v.get('trend_score', 0), 4),
+                    "Freshness": round(v.get('freshness_score', 0), 4),
                     "Video Type": v.get("video_type", "Video"),
-                    "Title (First Video)": v.get("title", "")[:70],
+                    "Title (First Video)": v.get("title", ""),
                 })
 
-            st.dataframe(timeline_rows, use_container_width=True, hide_index=True)
+            st.dataframe(
+                timeline_rows, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "Views (First Video)": st.column_config.NumberColumn(format="%d"),
+                    "Likes": st.column_config.NumberColumn(format="%d"),
+                    "Comments": st.column_config.NumberColumn(format="%d"),
+                    "Eng. Rate (%)": st.column_config.ProgressColumn(format="%.2f%%", min_value=0, max_value=20),
+                    "Eng. Score": st.column_config.NumberColumn(format="%.4f"),
+                    "Trend Score": st.column_config.NumberColumn(format="%.4f"),
+                    "Freshness": st.column_config.NumberColumn(format="%.4f"),
+                    "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f")
+                }
+            )
 
             st.markdown("---")
 
             # ── ALL MATCHING VIDEOS (chronological feed table) ─────────
-            st.markdown(f"### 📺 All {len(matched)} Videos — Chronological Feed")
+            st.markdown(f"### 📺 Chronological Feed")
 
             feed_data = []
             for v in matched:
@@ -936,9 +955,15 @@ elif page == PAGE_COVERAGE:
                 feed_data.append({
                     "Time Gap": delay_label,
                     "Channel": v.get("channel_name", ""),
-                    "Published At": ts.strftime("%H:%M, %d %b") if ts else "",
-                    "Title": v.get("title", ""),
+                    "Published At": ts.strftime("%Y-%m-%d %H:%M") if ts else "",
+                    "Type": v.get("video_type", "Video"),
                     "Views": v.get("view_count", 0),
+                    "Velocity (VPH)": round(v.get("views_per_hour", 0), 1),
+                    "Likes": v.get("like_count", 0),
+                    "Comments": v.get("comment_count", 0),
+                    "Eng. Rate (%)": round(v.get("engagement_rate", 0), 2),
+                    "Duration": v.get("duration_formatted", ""),
+                    "Title": v.get("title", ""),
                     "Video Link": v.get("url", ""),
                 })
 
@@ -949,6 +974,10 @@ elif page == PAGE_COVERAGE:
                 column_config={
                     "Video Link": st.column_config.LinkColumn("Watch", display_text="Open YouTube"),
                     "Views": st.column_config.NumberColumn(format="%d"),
+                    "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f"),
+                    "Likes": st.column_config.NumberColumn(format="%d"),
+                    "Comments": st.column_config.NumberColumn(format="%d"),
+                    "Eng. Rate (%)": st.column_config.ProgressColumn(format="%.2f%%", min_value=0, max_value=20),
                     "Time Gap": st.column_config.TextColumn("Gap", width="small")
                 }
             )
