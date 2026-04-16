@@ -472,17 +472,17 @@ if engine is None:
     st.markdown(
         """
     <div style="text-align:center; padding:80px 20px;">
-        <h1 style="font-size:3rem; margin-bottom:16px;">🎯</h1>
-        <h2>Welcome to YT Recommender</h2>
-        <p style="color:#9898b0; margin-top:8px;">
-            Click <strong>Fetch Fresh Data</strong> in the sidebar to get started.
+        <h1 style="font-size:3rem; margin-bottom:16px;">📊</h1>
+        <h2 style="color: #FF3D71;">No Data Found</h2>
+        <p style="color:#9898b0; margin-top:8px; font-size: 1.2rem;">
+            It looks like there's no data available yet. <br>
+            <strong>Kindly refresh the data first</strong> using the button in the sidebar to populate the dashboard.
         </p>
     </div>
     """,
         unsafe_allow_html=True,
     )
-    # Even if engine is None, we still want the sidebar for "Fetch Fresh Data"
-    # So we don't st.stop() immediately if we are in the middle of a fetch or first run
+    st.stop() # Prevent further execution if data is missing
 
 
 if page == PAGE_DASHBOARD:
