@@ -91,3 +91,10 @@ The system comes pre-configured to analyze top Indian news networks directly out
 - **India TV**
 - **NDTV**
 - **ABP News**
+
+## 📄 License
+
+This project is open-source and licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+**Disclaimer:** This tool is for educational purposes. Ensure you comply with the YouTube API Terms of Service. Never leak your `private_key.json` or `config.py` API keys!
