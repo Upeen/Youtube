@@ -129,13 +129,13 @@ st.markdown(
     }
 
     .stat-value {
-        font-size: 2rem;
+        font-size: 1.5rem;
         font-weight: 800;
         letter-spacing: -1px;
     }
 
     .stat-label {
-        font-size: 0.82rem;
+        font-size: 0.72rem;
         color: #9898b0;
     }
 
@@ -157,10 +157,26 @@ st.markdown(
     .video-body { padding: 16px; }
 
     .video-title {
-        font-size: 0.88rem;
+        font-size: 0.8rem;
         font-weight: 600;
         color: #f0f0f5;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
+    }
+
+    .video-channel {
+        font-size: 0.72rem;
+        color: #9898b0;
+        font-weight: 500;
+        margin-bottom: 6px;
+    }
+
+    .video-stats {
+        display: flex;
+        gap: 10px;
+        font-size: 0.68rem;
+        color: #f0f0f5;
+        flex-wrap: wrap;
+        font-weight: 600;
     }
 
     .badge {
