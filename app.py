@@ -375,7 +375,7 @@ def render_channel_card(name, stats):
     """
 
 
-@st.cache_resource(ttl=3600)  # Auto-refresh every hour
+@st.cache_resource
 def load_engine():
     engine = RecommendationEngine()
     if engine.load_data() and engine.videos:
@@ -385,17 +385,6 @@ def load_engine():
 
 
 engine = load_engine()
-
-# Helper cached functions for data operations
-@st.cache_data(ttl=600)  # Cache results for 10 minutes
-def get_cached_trending(_engine, limit, channel, date_range, sort_by, video_type):
-    if not _engine: return []
-    return _engine.get_trending(limit, channel=channel, date_range=date_range, sort_by=sort_by, video_type=video_type)
-
-@st.cache_data(ttl=600)
-def get_cached_search(_engine, query, top_n, channel, date_range, video_type):
-    if not _engine: return []
-    return _engine.search_videos(query, top_n=top_n, channel=channel, date_range=date_range, video_type=video_type)
 
 
 def get_local_filters(key_prefix):
@@ -558,7 +547,7 @@ if page == PAGE_DASHBOARD:
 
     # ── FULL WIDTH TRENDING ──────────────────────────────────────────
     st.markdown("### 🔥 Top Viral Trends (Top 50)")
-    trending = get_cached_trending(engine, 50, channel=local_channel, date_range=local_date_range, video_type=local_vt, sort_by="trend_score")
+    trending = engine.get_trending(50, channel=local_channel, date_range=local_date_range, video_type=local_vt)
     
     if trending:
         tcols = st.columns(3)
@@ -595,8 +584,7 @@ elif page == PAGE_TRENDING:
         selected_sort_label = st.selectbox("Sort By", list(sort_opts.keys()), key="trend_sort")
         sort_key = sort_opts[selected_sort_label]
 
-    trending = get_cached_trending(
-        engine,
+    trending = engine.get_trending(
         limit, 
         channel=local_channel, 
         date_range=local_date_range, 
@@ -628,7 +616,7 @@ elif page == PAGE_SEARCH:
     query = st.text_input("Search query", placeholder="Type keywords...", key="search_q")
 
     if query:
-        results = get_cached_search(engine, query, top_n=24, channel=local_channel, date_range=local_date_range, video_type=local_vt)
+        results = engine.search_videos(query, top_n=24, channel=local_channel, date_range=local_date_range, video_type=local_vt)
 
         if results:
             st.success(f'Found {len(results)} results for "{query}"')
