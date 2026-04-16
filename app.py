@@ -168,7 +168,11 @@ st.markdown(
     }
 
     .badge-trend {
+        background: linear-gradient(135deg, #FF3D71 0%, #FF6B6B 100%);
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(255, 61, 113, 0.3);
         animation: pulse 2s infinite;
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .video-thumb {
