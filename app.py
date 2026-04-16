@@ -652,112 +652,82 @@ elif page == PAGE_DATA:
 
     local_date_range, local_channel, local_vt = get_local_filters("raw_data")
 
-    # ── Filtering Logic ───────────────────────────────────────────────
-    filtered = engine.videos.copy()
+    # ── Vectorized Filtering Logic with Pandas ──────────────────────────
+    import pandas as pd
+    import datetime
+    df = pd.DataFrame(engine.videos)
     
-    if local_channel != "All":
-        filtered = [v for v in filtered if v["channel_name"] == local_channel]
-    
-    if local_vt != "All":
-        filtered = [v for v in filtered if v.get("video_type", "Video") == local_vt]
-        
-    if local_date_range and len(local_date_range) == 2:
-        from datetime import datetime as dt
-        start_date, end_date = local_date_range
-        filtered_by_date = []
-        for v in filtered:
-            pub_str = v.get("published_at", "")
-            if pub_str:
-                try:
-                    pub_date = dt.fromisoformat(pub_str.replace("Z", "+00:00")).date()
-                    if start_date <= pub_date <= end_date:
-                        filtered_by_date.append(v)
-                except:
-                    pass
-        filtered = filtered_by_date
-
-    st.markdown("### 📑 Dataset")
-    
-    if not filtered:
-        st.info("No videos found matching the current filters.")
+    if df.empty:
+        st.info("No data available to display.")
     else:
-        # Prepare data for display
-        display_data = []
-        import math
-        for v in filtered:
-            # Pre-calculate velocity for display
-            age_hours = max(v.get("age_hours", 1), 1)
-            velocity = v.get("view_count", 0) / age_hours
-            
-            # Calculate scores using engine methods if they exist
-            eng_score = engine._engagement_score(v)
-            fresh_score = engine._freshness_score(v)
-            trend_score = (math.log10(velocity + 1) / 5) * 0.6 + eng_score * 0.4
-
-            # Format Publication Date and Time
-            pub_at = v.get("published_at", "")
-            try:
-                dt_obj = dt.fromisoformat(pub_at.replace("Z", "+00:00")).astimezone(None)
-                pub_date = dt_obj.strftime("%Y-%m-%d")
-                pub_time = dt_obj.strftime("%I:%M %p")
-            except:
-                pub_date = pub_at[:10]
-                pub_time = "N/A"
-            
-            display_data.append({
-                "Published": pub_date,
-                "Time": pub_time,
-                "Channel": v.get("channel_name", ""),
-                "Title": v.get("title", ""),
-                "Type": v.get("video_type", "Video"),
-                "Views": v.get("view_count", 0),
-                "Velocity (VPH)": round(velocity, 2),
-                "Likes": v.get("like_count", 0),
-                "Comments": v.get("comment_count", 0),
-                "Eng. Rate (%)": round(v.get("engagement_rate", 0), 2),
-                "Eng. Score": round(eng_score, 4),
-                "Freshness": round(fresh_score, 4),
-                "Trend Score": round(trend_score, 4),
-                "Duration": v.get("duration_formatted", ""),
-                "Tags": ", ".join(v.get("tags", [])) if v.get("tags") else "",
-                "URL": v.get("url", ""),
-                "Video ID": v.get("video_id", "")
-            })
-
-        import pandas as pd
-        df = pd.DataFrame(display_data)
+        # Pre-process columns
+        df['pub_dt'] = pd.to_datetime(df['published_at'])
         
-        # Sort by most recent by default
-        df = df.sort_values("Published", ascending=False)
+        # Apply Filters
+        if local_channel != "All":
+            df = df[df["channel_name"] == local_channel]
+        
+        if local_vt != "All":
+            df = df[df["video_type"].fillna("Video") == local_vt]
+            
+        if local_date_range and len(local_date_range) == 2:
+            df = df[(df["pub_dt"].dt.date >= local_date_range[0]) & (df["pub_dt"].dt.date <= local_date_range[1])]
 
-        st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "URL": st.column_config.LinkColumn("Watch Link", display_text="Open"),
-                "Views": st.column_config.NumberColumn(format="%d"),
-                "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f"),
-                "Eng. Rate (%)": st.column_config.ProgressColumn(
-                    "Eng. Rate (%)",
-                    format="%.2f%%",
-                    min_value=0,
-                    max_value=20,
-                ),
-                "Trend Score": st.column_config.NumberColumn(format="%.4f"),
-                "Eng. Score": st.column_config.NumberColumn(format="%.4f"),
-                "Freshness": st.column_config.NumberColumn(format="%.4f"),
-            }
-        )
+        st.markdown("### 📑 Dataset")
+        
+        if df.empty:
+            st.info("No videos found matching the current filters.")
+        else:
+            # Create display dataframe using pre-calculated values
+            display_df = pd.DataFrame()
+            display_df["Published"] = df["pub_dt"].dt.strftime("%Y-%m-%d")
+            display_df["Time"] = df["pub_dt"].dt.strftime("%I:%M %p")
+            display_df["Channel"] = df["channel_name"]
+            display_df["Title"] = df["title"]
+            display_df["Type"] = df["video_type"].fillna("Video")
+            display_df["Views"] = df["view_count"]
+            display_df["Velocity (VPH)"] = df["views_per_hour"]
+            display_df["Likes"] = df["like_count"]
+            display_df["Comments"] = df["comment_count"]
+            display_df["Eng. Rate (%)"] = df["engagement_rate"].round(2)
+            display_df["Eng. Score"] = df["engagement_score"].round(4)
+            display_df["Freshness"] = df["freshness_score"].round(4)
+            display_df["Trend Score"] = df["trend_score"].round(4)
+            display_df["Duration"] = df["duration_formatted"]
+            display_df["Tags"] = df["tags"].apply(lambda x: ", ".join(x[:5]) if isinstance(x, list) else "")
+            display_df["URL"] = df["url"]
+            
+            # Sort by most recent
+            display_df = display_df.sort_values(["Published", "Time"], ascending=False)
 
-        # Download CSV
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Raw Data (CSV)",
-            data=csv,
-            file_name=f"youtube_raw_data_{local_channel}.csv",
-            mime='text/csv',
-        )
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "URL": st.column_config.LinkColumn("Watch Link", display_text="Open"),
+                    "Views": st.column_config.NumberColumn(format="%d"),
+                    "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f"),
+                    "Eng. Rate (%)": st.column_config.ProgressColumn(
+                        "Eng. Rate (%)",
+                        format="%.2f%%",
+                        min_value=0,
+                        max_value=20,
+                    ),
+                    "Trend Score": st.column_config.NumberColumn(format="%.4f"),
+                    "Eng. Score": st.column_config.NumberColumn(format="%.4f"),
+                    "Freshness": st.column_config.NumberColumn(format="%.4f"),
+                }
+            )
+
+            # Download CSV
+            csv = display_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Raw Data (CSV)",
+                data=csv,
+                file_name=f"youtube_raw_data_{local_channel}.csv",
+                mime='text/csv',
+            )
 
 elif page == PAGE_COVERAGE:
     import re

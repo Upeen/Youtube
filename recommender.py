@@ -53,6 +53,13 @@ class RecommendationEngine:
                 data = json.load(f)
                 self.videos = data.get("videos", [])
                 self.fetched_at = data.get("fetched_at", "")
+            
+            # Pre-calculate basic engagement metrics on load
+            for v in self.videos:
+                v["engagement_score"] = self._engagement_score(v)
+                age = max(v.get("age_hours", 1), 1)
+                v["views_per_hour"] = round(v.get("view_count", 0) / age, 1)
+                
             print(f"[OK] Loaded {len(self.videos)} videos")
             return True
         except FileNotFoundError:
@@ -120,7 +127,14 @@ class RecommendationEngine:
             magnitude = math.sqrt(sum(v ** 2 for v in tfidf_vec.values())) or 1
             self.tfidf_matrix[i] = {k: v / magnitude for k, v in tfidf_vec.items()}
 
-        print(f"[OK] Built TF-IDF matrix ({len(self.vocab)} unique terms)")
+        # Pre-calculate trend scores for all videos after TF-IDF is ready
+        for i, v in enumerate(self.videos):
+            velocity = v.get("views_per_hour", 0)
+            engagement = v.get("engagement_score", 0)
+            v["trend_score"] = round((math.log10(velocity + 1) / 5) * 0.6 + engagement * 0.4, 4)
+            v["freshness_score"] = self._freshness_score(v)
+
+        print(f"[OK] Built TF-IDF matrix ({len(self.vocab)} unique terms) & pre-calculated trends")
 
     def _cosine_similarity(self, vec1, vec2):
         """Compute cosine similarity between two sparse vectors."""
