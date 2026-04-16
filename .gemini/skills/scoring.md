@@ -1,31 +1,49 @@
 # 🧮 Skill: Algorithmic Scoring & TF-IDF Logic
 
 ## Overview
-This skill documents the mathematics behind the recommendation engine and trend scoring. Use this to tune how content is prioritized.
+This skill documents the mathematics behind the recommendation engine and trend scoring. Use this to tune how content is prioritized across the Trending, Search, and Recommendation modules.
 
 ## 🛠️ Implementation Details
-- **Recommendation Logic**: `recommender.py`
-- **Scoring Formulas**: 
-  - **Trend Score**: `(NormalizedVPH * 0.6) + (EngScore * 0.4)`
-- **Coverage Race**: Calculates temporal offsets between channels to identify the "first reporter" based on `published_at` timestamps.
-- **Match Score**: TF-IDF Cosine Similarity across Title (3x), Tags (2x), and Description (1x).
-- **Engagement Score**: Log-scaled metrics of (Views, Likes, Comments).
+- **Core Engine**: `recommender.py`
+- **Engagement Quality (Log-Normal)**:
+    - Normalizes raw metrics to a 0-1 range to handle high-variance YouTube data.
+    - `EngScore = min(1.0, (Log(Views)/8 * 0.4) + (Log(Likes)/6 * 0.35) + (Log(Comments)/5 * 0.25))`
+- **Trend Velocity Algorithm**:
+    - `Trend Score = (Log10(VPH + 1) / 5) * 0.6 + (EngScore * 0.4)`
+- **Semantic Matching (TF-IDF)**:
+    - **Title Weight**: 3x replication (Primary driver).
+    - **Tags Weight**: 2x replication (Secondary driver).
+    - **Description Weight**: 1x (Context provider).
+- **Match Score**: Cosine Similarity calculation between query and pre-vectorized video documents.
 
 ## 🚀 Execution Instructions
 
-### Tuning Feature Weights
-- Adjust the `FEATURE_WEIGHTS` dictionary in `recommender.py` to change the importance of Title vs. Tags vs. Description.
-- Modify the scoring multipliers in the `calculate_scores` function to prioritize freshness over engagement (or vice versa).
+### Tuning the "Sensitivity"
+- To make the dashboard "Flashier" (rewarding spikes), increase the 0.6 weight of Velocity in `recommender.py`.
+- To make it "higher quality" (rewarding audience loyalty), increase the 0.4 weight of `EngScore`.
 
-### Adding New Metrics
-1. Extract the metric in `fetch_data.py`.
-2. Update the `preprocess_data` function in `recommender.py` to include the new field.
-3. Incorporate it into the final weight aggregation.
+### Updating the Stopword list
+- If the search results contain too many generic terms (e.g. "hindi", "news"), add them to the `STOP_WORDS` set in `recommender.py` to improve similarity relevance.
+
+## 💡 Easy Understanding: Search Match Walkthrough
+
+**Task**: You search for **"Modi Interview"**.
+
+1.  **Video A**: Has "Modi Interview" in the **Title**.
+    - Since Title Weight = **3x**, its similarity score jumps to **0.95**.
+2.  **Video B**: Has "Modi Interview" only in the **Description**.
+    - Since Description Weight = **1x**, its similarity score is much lower, around **0.30**.
+3.  **Video C**: Has "Modi" in Title and "Interview" in **Tags** (2x).
+    - Its score lands in the middle, around **0.70**.
+
+**Final Result**: Video A appears at the top, followed by Video C, then Video B. This ensures users find the most relevant coverage first.
+
+---
 
 ## ⚠️ Safety & Constraints
-- **Normalization**: Always log-normalize high-variance metrics like view counts to prevent viral outliers from breaking the distribution.
-- **TF-IDF Sparsity**: Ensure clean text normalization before vectorization to avoid noisy features.
+- **Zero View Handle**: The system uses `+1` in logs to avoid `math domain error` on new videos with 0 views/likes.
+- **Normalization Capping**: The `min(1.0, ...)` constraint is critical to prevent a single extreme outlier from occupying the entire top 50 list.
 
 ## 🔍 Validation
-- Use the **Search** tab to verify if the ranking of results feels "smarter" after tuning.
-- Check the **Trending** tab to ensure the top 5 videos have a high views-per-hour (VPH) ratio.
+- Perform a search for a known keyword and ensure the `search_score %` displayed on the result cards aligns with content relevance.
+- Ensure the **Trending Score** in the Raw Data view is between 0.0 and 1.0.

@@ -5,31 +5,46 @@ This skill defines how to manage the system's global settings, including API key
 
 ## 🛠️ Implementation Details
 - **Configuration File**: `config.py`
-- **Primary Data Structures**: `CHANNEL_IDS` (dict), `YOUTUBE_API_KEY` (string).
+- **Tracked Network**: `CHANNEL_IDS` (dictionary of 11+ major news networks).
+- **Time Window**: `DAYS_BACK` integer (Controls the lookback depth).
+- **API Target**: `PUBLISHED_AFTER` is automatically calculated as an ISO timestamp based on `DAYS_BACK`.
+
+## 💡 Easy Understanding: Configuration Walkthrough
+
+**Task**: You want to track a new competitor, **Local News**.
+
+1.  **Find ID**: You find their YouTube ID: `UC_LOCAL_NEWS_123`.
+2.  **Edit `config.py`**:
+    ```python
+    CHANNEL_IDS = {
+        ...,
+        "local_news": "UC_LOCAL_NEWS_123"
+    }
+    ```
+3.  **Adjust Depth**: You want to see their last 5 days of history.
+    - Set `DAYS_BACK = 5`.
+4.  **Fetch**: The next time you click "Fetch" in the UI, the system will pull 5 days of data for strictly these 12 channels.
+
+---
 
 ## 🚀 Execution Instructions
 
 ### Adding a New Channel
-1. Obtain the YouTube Channel ID (e.g., `UC...`).
-2. Add a new entry to the `CHANNEL_IDS` dictionary in `config.py`:
-   ```python
-   CHANNEL_IDS = {
-       "Channel Name": "UC_ID_HERE",
-       ...
-   }
-   ```
-3. Run `python fetch_data.py` to populate data for the new channel.
+1. Obtain the YouTube Channel ID (e.g., `UC...` or `@handle`).
+2. Add a new entry to the `CHANNEL_IDS` dictionary in `config.py`.
+3. Restart the Streamlit dashboard and click **"Fetch Fresh Data"** to trigger a sync for the new channel.
 
 ### Updating API Keys
-- Replace the `YOUTUBE_API_KEY` string with a fresh key from the Google Cloud Console.
+- Replace the `YOUTUBE_API_KEY` string. Ensure the key has the "YouTube Data API v3" enabled in the Google Cloud Console.
 
-### Adjusting Time Windows
-- Modify `DAYS_BACK` to control how far into the past the system looks for content.
+### Adjusting Data Depth
+- Change `DAYS_BACK = 2` to `DAYS_BACK = 7` to pull a week's worth of data.
+- **Note**: Increasing this significantly will increase the time taken for the "Fetch" operation.
 
 ## ⚠️ Safety & Constraints
-- **Key Security**: Never commit your `config.py` with the API key to public repositories. 
-- **Formatting**: Ensure channel IDs are strings and keys are comma-separated if using multiple (though current implementation uses one).
+- **Key Security**: Current implementation uses a hardcoded key in `config.py` for ease of use in local demis, but should be moved to environment variables for production.
+- **Deduplication**: The `fetch_data.py` logic automatically handles duplicate entries if the API returns the same video multiple times.
 
 ## 🔍 Validation
-- Restart the Streamlit dashboard (`streamlit run app.py`).
-- Use the sidebar filter to check if the new channel appears in the dropdown list.
+- Change `DAYS_BACK` to `1` and run the fetcher.
+- Verify in the **Raw Data** explorer that no videos older than 24 hours are present.

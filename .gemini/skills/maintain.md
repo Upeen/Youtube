@@ -8,6 +8,18 @@ Instructions for general upkeep, dependency updates, and environment management.
 - **Shell Automation**: `start.sh`, `start.bat`
 - **Persistence**: `data/` directory
 
+## 💡 Easy Understanding: Maintenance Scenario
+
+**Problem**: The dashboard feels slow or the view counts seem "stuck" for some videos.
+
+1.  **Stop the App**: Close the terminal running Streamlit.
+2.  **Purge Cache**: Delete all files inside the `/data` folder.
+3.  **Perform Clean Sync**: Run `python fetch_data.py` to rebuild the JSON from scratch.
+4.  **Verify Integrity**: Check `VIDEO_DATA_FILE` size. If it's $>0$, the re-sync was successful.
+5.  **Restart**: Run `./start.sh` to see the fresh, high-performance dashboard.
+
+---
+
 ## 🚀 Execution Instructions
 
 ### Updating Dependencies
