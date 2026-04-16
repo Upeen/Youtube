@@ -139,10 +139,12 @@ def fetch_channel_videos(channel_id, channel_name):
             age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
 
             title = snippet.get("title", "")
+            tags = [t.lower() for t in snippet.get("tags", [])]
             live_status = snippet.get("liveBroadcastContent", "none")
+            
             if live_status == "live" or "LIVE" in title.upper() or duration_seconds > 3600:
                 video_type = "Live"
-            elif 0 < duration_seconds <= 60:
+            elif (0 < duration_seconds <= 60) or ("shorts" in tags):
                 video_type = "Short"
             else:
                 video_type = "Video"
