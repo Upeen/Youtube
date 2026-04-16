@@ -597,7 +597,22 @@ elif page == PAGE_TRENDING:
         with cols[(index - 1) % 3]:
             score = video.get('trend_score', 0)
             vph = format_number(video.get('views_per_hour', 0))
-            badge_text = f"#{index} Trending | 💎 {score:.2f} | {vph} VPH"
+            
+            if sort_key == "view_count":
+                badge_text = f"#{index} Views | 👁️ {format_number(video.get('view_count', 0))}"
+            elif sort_key == "like_count":
+                badge_text = f"#{index} Likes | 👍 {format_number(video.get('like_count', 0))}"
+            elif sort_key == "comment_count":
+                badge_text = f"#{index} Comments | 💬 {format_number(video.get('comment_count', 0))}"
+            elif sort_key == "engagement_score":
+                badge_text = f"#{index} Engagement | 📈 {video.get('engagement_score', 0):.2f}"
+            elif sort_key == "age_hours":
+                badge_text = f"#{index} Newest"
+            elif sort_key == "views_per_hour":
+                badge_text = f"#{index} Velocity | 🚀 {vph} VPH"
+            else:
+                badge_text = f"#{index} Trending | 💎 {score:.2f} | {vph} VPH"
+                
             st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
             st.markdown("")
 

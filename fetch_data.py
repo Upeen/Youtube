@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 from config import YOUTUBE_API_KEY, CHANNEL_IDS, DATA_DIR, VIDEO_DATA_FILE, PUBLISHED_AFTER
 
 MAX_RESULTS_PER_CHANNEL = 500  # Reduced for speed, can be adjusted
-CONCURRENT_THREADS = 4
+CONCURRENT_THREADS = 12
 
 
 def get_youtube_service():
@@ -48,12 +48,27 @@ def fetch_channel_videos(channel_id, channel_name):
     youtube = get_youtube_service()
     videos = []
 
-    # Get the uploads playlist ID
+    # Handle different channel identifier formats (ID, Handle, Username)
     try:
-        channel_response = youtube.channels().list(
-            part="contentDetails,statistics,snippet",
-            id=channel_id
-        ).execute()
+        kwargs = {"part": "contentDetails,statistics,snippet"}
+        if channel_id.startswith("@"):
+            kwargs["forHandle"] = channel_id[1:]
+        elif channel_id.startswith("UC"):
+            kwargs["id"] = channel_id
+        else:
+            kwargs["forUsername"] = channel_id
+            
+        channel_response = youtube.channels().list(**kwargs).execute()
+        
+        # Fallback if standard ID fails (some channels change or get disabled)
+        if not channel_response.get("items") and channel_id.startswith("UC"):
+            # Try a search as last resort if ID fails
+            search_resp = youtube.search().list(part="snippet", type="channel", q=channel_name, maxResults=1).execute()
+            if search_resp.get("items"):
+                alt_id = search_resp["items"][0]["snippet"]["channelId"]
+                print(f"  [!] ID failed for {channel_name}, auto-resolved to: {alt_id}")
+                channel_response = youtube.channels().list(part="contentDetails,statistics,snippet", id=alt_id).execute()
+                
     except Exception as e:
         print(f"  [X] Error fetching channel info for {channel_name}: {e}")
         return []
