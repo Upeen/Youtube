@@ -5,7 +5,7 @@
 import os
 from datetime import datetime, timedelta
 
-YOUTUBE_API_KEY = "AIzaSyDSbns8dqoHCXumzfLKQo4lnacRatL0Km4"
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "AIzaSyDSbns8dqoHCXumzfLKQo4lnacRatL0Km4")
 
 CHANNEL_IDS = {
     "zee_news": "UCIvaYmXn910QMdemBG3v1pQ",
