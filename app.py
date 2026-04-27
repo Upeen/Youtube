@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone
 
 import streamlit as st
+import pandas as pd
 
 from recommender import RecommendationEngine
 from config import VIDEO_DATA_FILE
@@ -12,6 +13,8 @@ PAGE_TRENDING = "Trending"
 PAGE_SEARCH = "Search"
 PAGE_COVERAGE = "Coverage Race"
 PAGE_DATA = "Raw Data"
+PAGE_RECENT = "Recent News"
+
 
 
 st.set_page_config(
@@ -278,13 +281,25 @@ def format_number(num):
     return f"{num:,}"
 
 
-def time_ago(date_str):
-    if not date_str:
+def time_ago(dt_val):
+    if dt_val is None or dt_val == "":
         return ""
     try:
-        dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        # Handle string input
+        if isinstance(dt_val, str):
+            dt = datetime.fromisoformat(dt_val.replace("Z", "+00:00"))
+        else:
+            # Handle datetime/Timestamp objects
+            dt = dt_val
+            
+        # Ensure timezone awareness for comparison
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+            
         diff = datetime.now(timezone.utc) - dt
         secs = int(diff.total_seconds())
+        if secs < 0: secs = 0 # Future-proof
+        
         if secs < 60:
             return "just now"
         if secs < 3600:
@@ -317,6 +332,11 @@ def render_video_card(video, badge_type=None, badge_text=None, show_eng_rate=Fal
     vtype_class = f"badge-type-{vtype.lower()}"
     type_badge_html = f'<div class="badge {vtype_class}" style="margin-left:5px">{vtype}</div>'
 
+    # Channel Category Badge
+    vcat = video.get("channel_tag", "General")
+    cat_badge_html = f'<div class="badge" style="margin-left:5px; background: rgba(255,255,255,0.1); color: #f0f0f5;">{vcat}</div>'
+
+
     tags_html = "".join(f'<span class="tag-pill">{tag}</span>' for tag in video["tags"][:5]) if video.get("tags") else ""
     tags_div = f'\n            <div style="margin-top:8px">{tags_html}</div>' if tags_html else ""
 
@@ -331,8 +351,9 @@ def render_video_card(video, badge_type=None, badge_text=None, show_eng_rate=Fal
 <img class="video-thumb" src="{video.get('thumbnail', '')}" alt="" loading="lazy" onerror="this.style.background='#16161f';this.style.minHeight='160px'">
 <div class="video-body">
 <div style="display:flex; align-items:center; margin-bottom: 8px;">
-{badge_html}{type_badge_html}
+{badge_html}{type_badge_html}{cat_badge_html}
 </div>
+
 <div class="video-title">{video.get('title', '')}</div>
 <div class="video-channel">{video.get('channel_name', '')} &middot; {video.get('duration_formatted', '')}</div>
 <div class="video-stats">
@@ -375,13 +396,31 @@ def render_channel_card(name, stats):
     """
 
 
-@st.cache_resource
+@st.cache_resource(ttl=50, show_spinner=False)
 def load_engine():
     engine = RecommendationEngine()
     if engine.load_data() and engine.videos:
         engine.build_tfidf()
         return engine
     return None
+
+
+@st.cache_data(ttl=50, show_spinner=False)
+def get_cached_trending(_engine, limit, channel, date_range, sort_by, video_type, category):
+    return _engine.get_trending(limit, channel=channel, date_range=date_range, sort_by=sort_by, video_type=video_type, category=category)
+
+
+
+@st.cache_data(ttl=50, show_spinner=False)
+def get_cached_search(_engine, query, top_n, channel, date_range, video_type, category):
+    return _engine.search_videos(query, top_n=top_n, channel=channel, date_range=date_range, video_type=video_type, category=category)
+
+
+
+@st.cache_data(ttl=50, show_spinner=False)
+def cached_fetch_data():
+    from fetch_data import fetch_all_channels
+    return fetch_all_channels()
 
 
 engine = load_engine()
@@ -392,7 +431,7 @@ def get_local_filters(key_prefix):
     from datetime import timedelta
     
     with st.expander("🔍 Filters & Tools", expanded=True):
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             today = datetime.date.today()
@@ -402,8 +441,56 @@ def get_local_filters(key_prefix):
                 help="Filter videos by publication date",
                 key=f"{key_prefix}_date"
             )
-            
+
+        # Pre-load data to get tags and filter channels
+        all_vids = []
+        if os.path.exists(VIDEO_DATA_FILE):
+            try:
+                with open(VIDEO_DATA_FILE, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                    all_vids = d.get("videos", [])
+            except:
+                pass
+
+        all_tags = sorted(list(set(v.get("channel_tag", "General") for v in all_vids)))
+        all_tags = ["All"] + all_tags
+
         with col2:
+            cat = st.selectbox("Category", all_tags, key=f"{key_prefix}_cat")
+            
+        with col3:
+            # Filter channels based on selected category
+            if cat == "All":
+                filtered_vids = all_vids
+            else:
+                filtered_vids = [v for v in all_vids if v.get("channel_tag", "General") == cat]
+            
+            chan_list = sorted(list(set(v["channel_name"] for v in filtered_vids)))
+            all_channels = ["All"] + chan_list
+            channel = st.selectbox("Channel", all_channels, key=f"{key_prefix}_channel")
+            
+        with col4:
+            vt = st.selectbox("Video Type", ["All", "Video", "Short"], key=f"{key_prefix}_vt")
+            
+    return date_range, channel, vt, cat
+
+
+
+
+def get_recent_filters(key_prefix):
+    import datetime
+    from datetime import timedelta
+    
+    with st.expander("🔍 Filters & Tools", expanded=True):
+        cols = st.columns(3)
+        
+        with cols[0]:
+            vt = st.selectbox("Video Type", ["All", "Video", "Short"], key=f"{key_prefix}_vt")
+            
+        with cols[1]:
+            minutes = st.number_input("Last - Min", min_value=0, value=0, help="Enter minutes to see videos published in that timeframe", key=f"{key_prefix}_min")
+            
+        with cols[2]:
             all_channels = ["All"]
             if os.path.exists(VIDEO_DATA_FILE):
                 try:
@@ -414,10 +501,17 @@ def get_local_filters(key_prefix):
                     pass
             channel = st.selectbox("Channel", all_channels, key=f"{key_prefix}_channel")
             
-        with col3:
-            vt = st.selectbox("Video Type", ["All", "Video", "Short", "Live"], key=f"{key_prefix}_vt")
+        # Row 2 for Date Range
+        dr_col = st.columns(1)[0]
+        with dr_col:
+            today = datetime.date.today()
+            date_range = st.date_input(
+                "Date Range",
+                value=(today, today),
+                key=f"{key_prefix}_date_range"
+            )
             
-    return date_range, channel, vt
+    return vt, minutes, channel, date_range
 
 
 with st.sidebar:
@@ -465,15 +559,20 @@ with st.sidebar:
 
     page = st.radio(
         "Navigate",
-        [PAGE_DASHBOARD, PAGE_TRENDING, PAGE_SEARCH, PAGE_COVERAGE, PAGE_DATA],
+        [PAGE_DASHBOARD, PAGE_TRENDING, PAGE_SEARCH, PAGE_COVERAGE, PAGE_DATA, PAGE_RECENT],
         label_visibility="collapsed",
     )
 
     st.divider()
 
+    import time
     if st.button("🚀 Fetch Fresh Data", use_container_width=True, type="primary"):
-        st.session_state.fetching_now = True
-        st.rerun()
+        last_fetch = st.session_state.get('last_fetch_time', 0)
+        if time.time() - last_fetch < 50:
+            st.toast(f"Next refresh available in {int(50 - (time.time() - last_fetch))}s", icon="⏳")
+        else:
+            st.session_state.fetching_now = True
+            st.rerun()
 
     st.divider()
     if st.button("🔓 Logout", use_container_width=True):
@@ -483,11 +582,12 @@ with st.sidebar:
 # --- TRIGGER ACTUAL FETCH IF STATE IS SET ---
 if st.session_state.get('fetching_now', False):
     with st.status("Fetching latest data...", expanded=True) as status:
-        st.write("Initializing Optimized Parallel Fetcher...")
+        st.write("Analyzing YouTube Content & Competitor Strategy...")
         try:
-            from fetch_data import fetch_all_channels
-            videos = fetch_all_channels()
+            videos = cached_fetch_data()
             st.write(f"Successfully fetched {len(videos)} videos!")
+            import time
+            st.session_state.last_fetch_time = time.time()
             st.cache_resource.clear()
             st.session_state.fetching_now = False
             status.update(label="Fetch Complete!", state="complete", expanded=False)
@@ -540,24 +640,49 @@ if page == PAGE_DASHBOARD:
         unsafe_allow_html=True,
     )
 
-    local_date_range, local_channel, local_vt = get_local_filters("dash")
+    local_date_range, _, local_vt, local_cat = get_local_filters("dash")
+
 
     st.markdown("---")
 
-
-    # ── FULL WIDTH TRENDING ──────────────────────────────────────────
+    # ── FULL WIDTH TRENDING with Tabs ──────────────────────────────────────────
     st.markdown("### 🔥 Top Viral Trends (Top 50)")
-    trending = engine.get_trending(50, channel=local_channel, date_range=local_date_range, video_type=local_vt)
     
-    if trending:
-        tcols = st.columns(3)
-        for index, video in enumerate(trending, start=1):
-            with tcols[(index-1) % 3]:
-                badge_text = f"#{index} Viral | 💎 {video.get('trend_score', 0):.2f} | {format_number(video.get('views_per_hour', 0))} VPH"
-                st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
-                st.markdown("")
-    else:
-        st.info("No trending data available for the current filters.")
+    # Pre-filter for tabs
+    df_raw = pd.DataFrame(engine.videos)
+    df_raw['pub_dt'] = pd.to_datetime(df_raw['published_at'])
+    df_filtered = df_raw.copy()
+    if local_vt != "All":
+        df_filtered = df_filtered[df_filtered["video_type"].fillna("Video") == local_vt]
+    if local_date_range and len(local_date_range) == 2:
+        df_filtered = df_filtered[(df_filtered["pub_dt"].dt.date >= local_date_range[0]) & (df_filtered["pub_dt"].dt.date <= local_date_range[1])]
+    if local_cat != "All":
+        df_filtered = df_filtered[df_filtered["channel_tag"].fillna("General") == local_cat]
+
+    
+    all_channels = sorted(df_filtered["channel_name"].unique().tolist())
+    tab_names = [f"All Sources ({len(df_filtered)})"]
+    for ch in all_channels:
+        ch_count = len(df_filtered[df_filtered["channel_name"] == ch])
+        tab_names.append(f"{ch} ({ch_count})")
+        
+    tabs = st.tabs(tab_names)
+    
+    for i, tab in enumerate(tabs):
+        with tab:
+            current_ch = "All" if i == 0 else all_channels[i-1]
+            trending = get_cached_trending(engine, 50, current_ch, local_date_range, "trend_score", local_vt, local_cat)
+
+            
+            if trending:
+                tcols = st.columns(3)
+                for index, video in enumerate(trending, start=1):
+                    with tcols[(index-1) % 3]:
+                        badge_text = f"#{index} Viral | 💎 {video.get('trend_score', 0):.2f} | {format_number(video.get('views_per_hour', 0))} VPH"
+                        st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
+                        st.markdown("")
+            else:
+                st.info(f"No trending data available for {current_ch} matching current filters.")
 
 elif page == PAGE_TRENDING:
     st.markdown('<div class="section-title">Trending Videos</div>', unsafe_allow_html=True)
@@ -566,7 +691,8 @@ elif page == PAGE_TRENDING:
         unsafe_allow_html=True,
     )
 
-    local_date_range, local_channel, local_vt = get_local_filters("trend")
+    local_date_range, _, local_vt, local_cat = get_local_filters("trend")
+
 
     col1, col2 = st.columns(2)
     with col1:
@@ -584,37 +710,66 @@ elif page == PAGE_TRENDING:
         selected_sort_label = st.selectbox("Sort By", list(sort_opts.keys()), key="trend_sort")
         sort_key = sort_opts[selected_sort_label]
 
-    trending = engine.get_trending(
-        limit, 
-        channel=local_channel, 
-        date_range=local_date_range, 
-        sort_by=sort_key, 
-        video_type=local_vt
-    )
+    # Pre-filter for tabs
+    df_raw = pd.DataFrame(engine.videos)
+    df_raw['pub_dt'] = pd.to_datetime(df_raw['published_at'])
+    df_filtered = df_raw.copy()
+    if local_vt != "All":
+        df_filtered = df_filtered[df_filtered["video_type"].fillna("Video") == local_vt]
+    if local_date_range and len(local_date_range) == 2:
+        df_filtered = df_filtered[(df_filtered["pub_dt"].dt.date >= local_date_range[0]) & (df_filtered["pub_dt"].dt.date <= local_date_range[1])]
+    if local_cat != "All":
+        df_filtered = df_filtered[df_filtered["channel_tag"].fillna("General") == local_cat]
 
-    cols = st.columns(3)
-    for index, video in enumerate(trending, start=1):
-        with cols[(index - 1) % 3]:
-            score = video.get('trend_score', 0)
-            vph = format_number(video.get('views_per_hour', 0))
-            
-            if sort_key == "view_count":
-                badge_text = f"#{index} Views | 👁️ {format_number(video.get('view_count', 0))}"
-            elif sort_key == "like_count":
-                badge_text = f"#{index} Likes | 👍 {format_number(video.get('like_count', 0))}"
-            elif sort_key == "comment_count":
-                badge_text = f"#{index} Comments | 💬 {format_number(video.get('comment_count', 0))}"
-            elif sort_key == "engagement_score":
-                badge_text = f"#{index} Engagement | 📈 {video.get('engagement_score', 0):.2f}"
-            elif sort_key == "age_hours":
-                badge_text = f"#{index} Newest"
-            elif sort_key == "views_per_hour":
-                badge_text = f"#{index} Velocity | 🚀 {vph} VPH"
+    
+    all_channels = sorted(df_filtered["channel_name"].unique().tolist())
+    tab_names = [f"All Sources ({len(df_filtered)})"]
+    for ch in all_channels:
+        ch_count = len(df_filtered[df_filtered["channel_name"] == ch])
+        tab_names.append(f"{ch} ({ch_count})")
+        
+    tabs = st.tabs(tab_names)
+    
+    for i, tab in enumerate(tabs):
+        with tab:
+            current_ch = "All" if i == 0 else all_channels[i-1]
+            trending = get_cached_trending(
+                engine,
+                limit, 
+                channel=current_ch, 
+                date_range=local_date_range, 
+                sort_by=sort_key, 
+                video_type=local_vt,
+                category=local_cat
+            )
+
+
+            if trending:
+                cols = st.columns(3)
+                for index, video in enumerate(trending, start=1):
+                    with cols[(index - 1) % 3]:
+                        score = video.get('trend_score', 0)
+                        vph = format_number(video.get('views_per_hour', 0))
+                        
+                        if sort_key == "view_count":
+                            badge_text = f"#{index} Views | 👁️ {format_number(video.get('view_count', 0))}"
+                        elif sort_key == "like_count":
+                            badge_text = f"#{index} Likes | 👍 {format_number(video.get('like_count', 0))}"
+                        elif sort_key == "comment_count":
+                            badge_text = f"#{index} Comments | 💬 {format_number(video.get('comment_count', 0))}"
+                        elif sort_key == "engagement_score":
+                            badge_text = f"#{index} Engagement | 📈 {video.get('engagement_rate', 0):.2f}%"
+                        elif sort_key == "age_hours":
+                            badge_text = f"#{index} Newest"
+                        elif sort_key == "views_per_hour":
+                            badge_text = f"#{index} Velocity | 🚀 {vph} VPH"
+                        else:
+                            badge_text = f"#{index} Trending | 💎 {score:.2f} | {vph} VPH"
+                            
+                        st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
+                        st.markdown("")
             else:
-                badge_text = f"#{index} Trending | 💎 {score:.2f} | {vph} VPH"
-                
-            st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
-            st.markdown("")
+                st.info(f"No trending data available for {current_ch} matching current filters.")
 
 
 
@@ -626,26 +781,48 @@ elif page == PAGE_SEARCH:
         unsafe_allow_html=True,
     )
 
-    local_date_range, local_channel, local_vt = get_local_filters("search")
+    local_date_range, _, local_vt, local_cat = get_local_filters("search")
+
 
     query = st.text_input("Search query", placeholder="Type keywords...", key="search_q")
 
     if query:
-        results = engine.search_videos(query, top_n=24, channel=local_channel, date_range=local_date_range, video_type=local_vt)
+        # Pre-filter for tabs logic (to get channels for search results)
+        raw_results = get_cached_search(engine, query, top_n=100, channel="All", date_range=local_date_range, video_type=local_vt, category=local_cat)
 
-        if results:
-            st.success(f'Found {len(results)} results for "{query}"')
-            cols = st.columns(3)
-            for index, video in enumerate(results):
-                with cols[index % 3]:
-                    match = video.get("search_score", 0)
-                    st.markdown(
-                        render_video_card(video, "match", f"Match: {match:.0%}"),
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown("")
-        else:
+        
+        if not raw_results:
             st.warning(f'No results found for "{query}"')
+        else:
+            all_channels = sorted(list(set(v["channel_name"] for v in raw_results)))
+            tab_names = [f"All Sources ({len(raw_results)})"]
+            for ch in all_channels:
+                ch_count = sum(1 for v in raw_results if v["channel_name"] == ch)
+                tab_names.append(f"{ch} ({ch_count})")
+                
+            tabs = st.tabs(tab_names)
+            
+            for i, tab in enumerate(tabs):
+                with tab:
+                    current_ch = "All" if i == 0 else all_channels[i-1]
+                    if current_ch == "All":
+                        display_results = raw_results[:24]
+                    else:
+                        display_results = [v for v in raw_results if v["channel_name"] == current_ch][:24]
+                    
+                    if display_results:
+                        st.success(f'Found {len(display_results)} results for "{query}"')
+                        cols = st.columns(3)
+                        for index, video in enumerate(display_results):
+                            with cols[index % 3]:
+                                match = video.get("search_score", 0)
+                                st.markdown(
+                                    render_video_card(video, "match", f"Match: {match:.0%}"),
+                                    unsafe_allow_html=True,
+                                )
+                                st.markdown("")
+                    else:
+                        st.info(f"No results for {current_ch} matching current query/filters.")
     else:
         st.markdown(
             """
@@ -665,84 +842,106 @@ elif page == PAGE_DATA:
         unsafe_allow_html=True,
     )
 
-    local_date_range, local_channel, local_vt = get_local_filters("raw_data")
+    local_date_range, _, local_vt, local_cat = get_local_filters("raw_data")
 
-    # ── Vectorized Filtering Logic with Pandas ──────────────────────────
+
+    # ── Vectorized Data Processing ──────────────────────────
     import pandas as pd
     import datetime
-    df = pd.DataFrame(engine.videos)
+    df_raw = pd.DataFrame(engine.videos)
     
-    if df.empty:
+    if df_raw.empty:
         st.info("No data available to display.")
     else:
-        # Pre-process columns
-        df['pub_dt'] = pd.to_datetime(df['published_at'])
+        df_raw['pub_dt'] = pd.to_datetime(df_raw['published_at'])
         
-        # Apply Filters
-        if local_channel != "All":
-            df = df[df["channel_name"] == local_channel]
-        
+        # Apply Date and Type Filters First
+        df_filtered = df_raw.copy()
         if local_vt != "All":
-            df = df[df["video_type"].fillna("Video") == local_vt]
+            df_filtered = df_filtered[df_filtered["video_type"].fillna("Video") == local_vt]
             
         if local_date_range and len(local_date_range) == 2:
-            df = df[(df["pub_dt"].dt.date >= local_date_range[0]) & (df["pub_dt"].dt.date <= local_date_range[1])]
+            df_filtered = df_filtered[(df_filtered["pub_dt"].dt.date >= local_date_range[0]) & (df_filtered["pub_dt"].dt.date <= local_date_range[1])]
 
-        st.markdown("### 📑 Dataset")
+        if local_cat != "All":
+            df_filtered = df_filtered[df_filtered["channel_tag"].fillna("General") == local_cat]
+
+
+        # ── Calculate Tab Counts ────────────────────────────────
+        all_channels = sorted(df_filtered["channel_name"].unique().tolist())
         
-        if df.empty:
-            st.info("No videos found matching the current filters.")
-        else:
-            # Create display dataframe using pre-calculated values
-            display_df = pd.DataFrame()
-            display_df["Published"] = df["pub_dt"].dt.strftime("%Y-%m-%d")
-            display_df["Time"] = df["pub_dt"].dt.strftime("%I:%M %p")
-            display_df["Channel"] = df["channel_name"]
-            display_df["Title"] = df["title"]
-            display_df["Type"] = df["video_type"].fillna("Video")
-            display_df["Views"] = df["view_count"]
-            display_df["Velocity (VPH)"] = df["views_per_hour"]
-            display_df["Likes"] = df["like_count"]
-            display_df["Comments"] = df["comment_count"]
-            display_df["Eng. Rate (%)"] = df["engagement_rate"].round(2)
-            display_df["Eng. Score"] = df["engagement_score"].round(4)
-            display_df["Freshness"] = df["freshness_score"].round(4)
-            display_df["Trend Score"] = df["trend_score"].round(4)
-            display_df["Duration"] = df["duration_formatted"]
-            display_df["Tags"] = df["tags"].apply(lambda x: ", ".join(x[:5]) if isinstance(x, list) else "")
-            display_df["URL"] = df["url"]
+        tab_names = [f"All Sources ({len(df_filtered)})"]
+        for ch in all_channels:
+            ch_count = len(df_filtered[df_filtered["channel_name"] == ch])
+            tab_names.append(f"{ch} ({ch_count})")
             
-            # Sort by most recent
-            display_df = display_df.sort_values(["Published", "Time"], ascending=False)
+        tabs = st.tabs(tab_names)
+        
+        for i, tab in enumerate(tabs):
+            with tab:
+                if i == 0:
+                    df_display_source = df_filtered.copy()
+                    current_ch = "All"
+                else:
+                    current_ch = all_channels[i-1]
+                    df_display_source = df_filtered[df_filtered["channel_name"] == current_ch].copy()
+                
+                if df_display_source.empty:
+                    st.info(f"No videos found for {current_ch} matching the current filters.")
+                else:
+                    # Sort source data by publication datetime (most recent first)
+                    df_display_source = df_display_source.sort_values("pub_dt", ascending=False)
 
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "URL": st.column_config.LinkColumn("Watch Link", display_text="Open"),
-                    "Views": st.column_config.NumberColumn(format="%d"),
-                    "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f"),
-                    "Eng. Rate (%)": st.column_config.ProgressColumn(
-                        "Eng. Rate (%)",
-                        format="%.2f%%",
-                        min_value=0,
-                        max_value=20,
-                    ),
-                    "Trend Score": st.column_config.NumberColumn(format="%.4f"),
-                    "Eng. Score": st.column_config.NumberColumn(format="%.4f"),
-                    "Freshness": st.column_config.NumberColumn(format="%.4f"),
-                }
-            )
+                    # Create display dataframe
+                    display_df = pd.DataFrame()
+                    display_df["Published"] = df_display_source["pub_dt"].dt.strftime("%Y-%m-%d")
+                    display_df["Time"] = df_display_source["pub_dt"].dt.strftime("%I:%M %p")
+                    display_df["Channel"] = df_display_source["channel_name"]
+                    display_df["Title"] = df_display_source["title"]
+                    display_df["Type"] = df_display_source["video_type"].fillna("Video")
+                    display_df["Views"] = df_display_source["view_count"]
+                    display_df["Velocity (VPH)"] = df_display_source["views_per_hour"]
+                    display_df["Likes"] = df_display_source["like_count"]
+                    display_df["Comments"] = df_display_source["comment_count"]
+                    display_df["Eng. Rate (%)"] = df_display_source["engagement_rate"].round(2)
+                    display_df["Eng. Score"] = df_display_source["engagement_score"].round(4)
+                    display_df["Freshness"] = df_display_source["freshness_score"].round(4)
+                    display_df["Trend Score"] = df_display_source["trend_score"].round(4)
+                    display_df["Duration"] = df_display_source["duration_formatted"]
+                    display_df["Tags"] = df_display_source["tags"].apply(lambda x: ", ".join(x[:5]) if isinstance(x, list) else "")
+                    display_df["URL"] = df_display_source["url"]
 
-            # Download CSV
-            csv = display_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download Raw Data (CSV)",
-                data=csv,
-                file_name=f"youtube_raw_data_{local_channel}.csv",
-                mime='text/csv',
-            )
+                    st.dataframe(
+                        display_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "URL": st.column_config.LinkColumn("Watch Link", display_text="Open"),
+                            "Views": st.column_config.NumberColumn(format="%d"),
+                            "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f"),
+                            "Eng. Rate (%)": st.column_config.ProgressColumn(
+                                "Eng. Rate (%)",
+                                format="%.2f%%",
+                                min_value=0,
+                                max_value=20,
+                            ),
+                            "Trend Score": st.column_config.NumberColumn(format="%.4f"),
+                            "Eng. Score": st.column_config.NumberColumn(format="%.4f"),
+                            "Freshness": st.column_config.NumberColumn(format="%.4f"),
+                        }
+                    )
+
+                    # Download CSV for this specific tab
+                    csv = display_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label=f"📥 Download {current_ch} Data (CSV)",
+                        data=csv,
+                        file_name=f"youtube_data_{current_ch}_{datetime.date.today()}.csv",
+                        mime='text/csv',
+                        key=f"download_{current_ch}_{i}"
+                    )
+
+# End of PAGE_DATA logic
 
 elif page == PAGE_COVERAGE:
     import re
@@ -755,7 +954,8 @@ elif page == PAGE_COVERAGE:
         unsafe_allow_html=True,
     )
 
-    local_date_range, local_channel, local_vt = get_local_filters("coverage")
+    local_date_range, local_channel, local_vt, local_cat = get_local_filters("coverage")
+
 
     # ── Topic search ──────────────────────────────────────────────────
     topic_query = st.text_input(
@@ -801,6 +1001,10 @@ elif page == PAGE_COVERAGE:
             # Video type filter
             if local_vt != "All" and v.get("video_type", "Video") != local_vt:
                 continue
+            
+            if local_cat != "All" and v.get("channel_tag", "General") != local_cat:
+                continue
+
 
             # Keyword match in title + tags (All tokens must match for combination search)
             title_text = v.get("title", "").lower()
@@ -916,6 +1120,7 @@ elif page == PAGE_COVERAGE:
                     "Freshness": round(v.get('freshness_score', 0), 4),
                     "Video Type": v.get("video_type", "Video"),
                     "Title (First Video)": v.get("title", ""),
+                    "Video Link": v.get("url", ""),
                 })
 
             st.dataframe(
@@ -930,7 +1135,8 @@ elif page == PAGE_COVERAGE:
                     "Eng. Score": st.column_config.NumberColumn(format="%.4f"),
                     "Trend Score": st.column_config.NumberColumn(format="%.4f"),
                     "Freshness": st.column_config.NumberColumn(format="%.4f"),
-                    "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f")
+                    "Velocity (VPH)": st.column_config.NumberColumn(format="%.1f"),
+                    "Video Link": st.column_config.LinkColumn("Watch", display_text="Open")
                 }
             )
 
@@ -981,3 +1187,89 @@ elif page == PAGE_COVERAGE:
                     "Time Gap": st.column_config.TextColumn("Gap", width="small")
                 }
             )
+
+elif page == PAGE_RECENT:
+    st.markdown('<div class="section-title">⏱ Recent News</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-subtitle"> The latest videos across all channels filtered by time</div>',
+        unsafe_allow_html=True,
+    )
+
+    local_vt, local_minutes, local_channel, local_date_range = get_recent_filters("recent_news_grid")
+    
+    if local_minutes == 0:
+        st.info("💡 Please enter a value in **Last - Min** above to view the latest news.")
+        st.stop()
+
+    # Filter data
+    from datetime import datetime, timezone, timedelta
+    
+    # Base timeframe filter
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=local_minutes)
+    
+    # Date Range Filter setup
+    start_date = None
+    end_date = None
+    if isinstance(local_date_range, (list, tuple)) and len(local_date_range) == 2:
+        start_date, end_date = local_date_range
+    elif isinstance(local_date_range, datetime.date):
+        start_date = end_date = local_date_range
+
+    filtered_vids = []
+    for v in engine.videos:
+        try:
+            pub_dt = datetime.fromisoformat(v["published_at"].replace("Z", "+00:00"))
+            
+            # 1. Date Range Check
+            if start_date:
+                v_date = pub_dt.date()
+                if v_date < start_date or v_date > end_date:
+                    continue
+            
+            # 2. Timeframe (Minutes) Check
+            if pub_dt < cutoff:
+                continue
+                
+            # 3. Video Type Filter
+            if local_vt != "All" and v.get("video_type", "Video") != local_vt:
+                continue
+                
+            # 4. Channel Filter (Ignored to allow tabs to show all channels)
+            
+            v_copy = v.copy()
+            v_copy["live_age"] = (now - pub_dt).total_seconds()
+            filtered_vids.append(v_copy)
+        except:
+            continue
+
+    # Sort by live age (smallest first = newest)
+    filtered_vids.sort(key=lambda x: x.get("live_age", 999999))
+    
+    # ── Source Tabs Logic ───────────────────────────────────
+    all_channels_in_data = sorted(list(set(v.get("channel_name") for v in filtered_vids)))
+    tab_names = [f"All Sources ({len(filtered_vids)})"]
+    for ch in all_channels_in_data:
+        ch_count = sum(1 for v in filtered_vids if v.get("channel_name") == ch)
+        tab_names.append(f"{ch} ({ch_count})")
+        
+    tabs = st.tabs(tab_names)
+    
+    for i, tab in enumerate(tabs):
+        with tab:
+            if i == 0:
+                display_vids = filtered_vids
+            else:
+                ch_name = all_channels_in_data[i-1]
+                display_vids = [v for v in filtered_vids if v.get("channel_name") == ch_name]
+                
+            if not display_vids:
+                st.info("No videos found for this source.")
+            else:
+                st.success(f"Showing all {len(display_vids)} latest videos.")
+                cols = st.columns(3)
+                for index, video in enumerate(display_vids, start=1):
+                    with cols[(index - 1) % 3]:
+                        badge_text = f"#{index} Newest | {time_ago(video.get('published_at', ''))}"
+                        st.markdown(render_video_card(video, "trend", badge_text, show_eng_rate=True), unsafe_allow_html=True)
+                        st.markdown("")

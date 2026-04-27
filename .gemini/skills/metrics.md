@@ -74,6 +74,30 @@ This document provides a comprehensive breakdown of the analytical metrics used 
 
 ---
 
+## 7. Recommendation Score 🎯
+**Description:** Used in the "Search" and "Recommendations" sections to suggest videos that are both relevant and high-quality.
+
+*   **Formula:** `(Content Similarity * 0.5) + (Engagement Score * 0.3) + (Freshness Score * 0.2)`
+*   **Logic**:
+    - **50% Relevance**: Based on TF-IDF cosine similarity between the search query/video and the target video.
+    - **30% Authority**: High-engagement videos are preferred.
+    - **20% Recency**: Newer videos get a slight boost to keep suggestions current.
+
+---
+
+## 8. UI Indicators & Visual Badges 💎
+**Description:** Real-time visual feedback provided on video cards to help users quickly gauge performance.
+
+| Icon | Label | Description |
+| :--- | :--- | :--- |
+| **💎** | **Trend Score** | A value between 0 and 1. High scores (>0.7) represent breakout hits. |
+| **🚀** | **VPH (Velocity)** | Views per hour. High VPH indicates a rapidly growing audience. |
+| **👁️** | **Views** | Total lifetime views of the video. |
+| **📈** | **Eng. Rate** | Engagement percentage (Likes + Comments relative to Views). |
+| **🎯** | **Match** | Percentage match based on search query similarity. |
+
+---
+
 ## Summary of Feature Weights
 | Use Case | Formula / Primary Driver | Feature Split |
 | :--- | :--- | :--- |

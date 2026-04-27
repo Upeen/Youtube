@@ -5,32 +5,33 @@
 import os
 from datetime import datetime, timedelta
 
-YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "AIzaSyDSbns8dqoHCXumzfLKQo4lnacRatL0Km4")
+# List of YouTube API keys for rotation (prevents quota limits)
+YOUTUBE_API_KEYS = ["AIzaSyCWWBSwovSVsLZNOFKCKJt6sIC1SkhF8LQ"]
+
+# Legacy compatibility (first key)
+YOUTUBE_API_KEY = YOUTUBE_API_KEYS[0]
 
 CHANNEL_IDS = {
-    "zee_news": "UCIvaYmXn910QMdemBG3v1pQ",
-    "times_of_india": "UCckHqySbfy5FcPP6MD_S-Yg",
-    "news18_india": "UCPP3etACgdUWvizcES1dJ8Q",
-    "aaj_tak": "UCt4t-jeY85JegMlZ-E5UWtA",
-    "india_tv": "UCttspZesZIDEwwpVIgoZtWQ",
-    "ndtv": "UCZFMm1mMw0F81Z37aaEzTUA",
-    "hindustan_times": "UC6RJ7-PaXg6TIH2BzZfTV7w",
-    "cnn_news18": "UCef1-8eOpJgud7szVPlZQAQ",
-    "ndtv_india_hindi": "UC9CYT9gSNLevX5ey2_6CK0Q",
-    "tv9_bharatvarsh": "UCOutOIcn_oho8pyVN3Ng-Pg",
-    "abp_news": "UCmphdqZNmqL72WJ2uyiNw5w"
+    "techulsive": {"id": "UCW2s_zlmBQ0l848Y6wmOiag", "tag": "Tech"},
+    "india_com": {"id": "UC8eEZ-l5z_zzG8GT0Tu0PaA", "tag": "News"},
+    "cricket_country": {"id": "UCBynf-PeQTgIAyKFLvJFwoA", "tag": "sports"},
+    "dna_india": {"id": "UCIRAYFbJmrP--jyrC9MAIWQ", "tag": "News"},
+    "pinkvilla": {"id": "UCkJZQddO3XTCdcLjN019FjA", "tag": "Bollywood"},
+    "filmibeat": {"id": "UCsaoYBUHz_lVB_dOmFwA9Zw", "tag": "Bollywood"},
+    "zoom": {"id": "UCotI-SqRXnkAZX4bMqlRNjw", "tag": "Bollywood"},
+    "Bollywood Life": {"id": "UC2GwMhJ9ffCY5hR_-cIz1Bw", "tag": "Bollywood"},
+    "TheHealthSite": {"id": "UCOqnb0JhnoEdSjvzb5aFfFw", "tag": "Health"},
+    "koimoi": {"id": "UC-Yzz2q5vFkCxbUiqJQzcEQ", "tag": "Bollywood"}
 }
+
+
 
 # ============================================================
 # TIME SETTINGS: Control how far back to fetch data
 # ============================================================
-# Change this single variable to control the fetch duration (e.g., 5, 10, 15, 30 days)
-DAYS_BACK = 2
+# HOURS_BACK controls how far back to fetch data (e.g., 24 for last 24 hours)
+HOURS_BACK =96
 
-# This automatically calculates the ISO timestamp required by the YouTube API
-PUBLISHED_AFTER = (datetime.utcnow() - timedelta(days=DAYS_BACK)).isoformat("T") + "Z"
-
-# Current cut-off date: {PUBLISHED_AFTER}
 # ============================================================
 
 # ============================================================

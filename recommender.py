@@ -173,7 +173,8 @@ class RecommendationEngine:
         else:
             return 0.1
 
-    def get_recommendations(self, video_id=None, top_n=12, channel="All", date_range=None, video_type="All", **kwargs):
+    def get_recommendations(self, video_id=None, top_n=12, channel="All", date_range=None, video_type="All", category="All", **kwargs):
+
         """Get video recommendations based on content similarity + engagement."""
         if not self.tfidf_matrix:
             self.build_tfidf()
@@ -198,6 +199,9 @@ class RecommendationEngine:
                     continue
                 if video_type != "All" and v.get("video_type", "Video") != video_type:
                     continue
+                if category != "All" and v.get("channel_tag", "General") != category:
+                    continue
+
                 if date_range and len(date_range) == 2:
                     pub_str = v.get("published_at", "")
                     if pub_str:
@@ -233,6 +237,9 @@ class RecommendationEngine:
                     continue
                 if video_type != "All" and v.get("video_type", "Video") != video_type:
                     continue
+                if category != "All" and v.get("channel_tag", "General") != category:
+                    continue
+
                 if date_range and len(date_range) == 2:
                     pub_str = v.get("published_at", "")
                     if pub_str:
@@ -258,7 +265,8 @@ class RecommendationEngine:
                 results.append(v)
             return results
 
-    def get_trending(self, top_n=10, channel="All", date_range=None, sort_by="trend_score", video_type="All", **kwargs):
+    def get_trending(self, top_n=10, channel="All", date_range=None, sort_by="trend_score", video_type="All", category="All", **kwargs):
+
         """Get trending videos using original Velocity + Engagement logic."""
         results = []
         for i, v in enumerate(self.videos):
@@ -266,6 +274,9 @@ class RecommendationEngine:
                 continue
             if video_type != "All" and v.get("video_type", "Video") != video_type:
                 continue
+            if category != "All" and v.get("channel_tag", "General") != category:
+                continue
+
             if date_range and len(date_range) == 2:
                 pub_str = v.get("published_at", "")
                 if pub_str:
@@ -343,7 +354,8 @@ class RecommendationEngine:
 
         return dict(stats)
 
-    def search_videos(self, query, top_n=20, channel="All", date_range=None, video_type="All"):
+    def search_videos(self, query, top_n=20, channel="All", date_range=None, video_type="All", category="All"):
+
         """Search videos by text query using TF-IDF similarity with filters."""
         if not self.tfidf_matrix:
             self.build_tfidf()
@@ -370,6 +382,9 @@ class RecommendationEngine:
                 continue
             if video_type != "All" and v.get("video_type", "Video") != video_type:
                 continue
+            if category != "All" and v.get("channel_tag", "General") != category:
+                continue
+
             if date_range and len(date_range) == 2:
                 pub_str = v.get("published_at", "")
                 if pub_str:
